@@ -1,7 +1,6 @@
 import streamlit as st
+from PIL import Image, ImageDraw, ImageFont
 from PyPDF2 import PdfMerger
-from PIL import Image
-from fpdf import FPDF
 import io
 import os
 
@@ -17,54 +16,87 @@ direction_aliases = {
     "Southeast": ["southeast", "se", "l se"]
 }
 
+# Load branding assets
+def load_overlay_assets():
+    logo = Image.open("assets/oneok_logo.png").convert("RGBA").resize((200, 80))
+    corner = Image.open("assets/gibson_corner.png").convert("RGBA").resize((80, 80))
+    return logo, corner
+
+# Create full-page image PDF
+def full_page_image(image_file):
+    img = Image.open(image_file).convert("RGB")
+    output = io.BytesIO()
+    img.save(output, format="PDF")
+    return output.getvalue()
+
+# Create directional page with overlays
+def create_overlayed_page(job_name, title, image_file, logo, corner):
+    base = Image.open(image_file).convert("RGB")
+    W, H = base.size
+    draw = ImageDraw.Draw(base)
+
+    # Font setup
+    try:
+        font = ImageFont.truetype("arial.ttf", size=36)
+    except:
+        font = ImageFont.load_default()
+
+    # Text
+    draw.text((W // 2, 40), job_name, font=font, anchor="mm", fill="black")
+    draw.text((W // 2, 100), title, font=font, anchor="mm", fill="black")
+
+    # Overlays
+    base.paste(logo, ((W - logo.width) // 2, 10), logo)
+    base.paste(corner, (0, 0), corner)
+    base.paste(corner, (W - corner.width, 0), corner)
+    base.paste(corner, (0, H - corner.height), corner)
+    base.paste(corner, (W - corner.width, H - corner.height), corner)
+
+    # Save to PDF
+    output = io.BytesIO()
+    base.save(output, format="PDF")
+    return output.getvalue()
+
+# Match directional images
 def match_directional_images(files, prefix):
     matched = {}
+    used_files = set()
     for direction, aliases in direction_aliases.items():
         for file in files:
             name = file.name.lower()
+            if file in used_files:
+                continue
             if prefix.lower() in name and any(alias in name for alias in aliases):
                 matched[direction] = file
+                used_files.add(file)
                 break
     return matched
 
-def create_image_page(job_name, title, image_file):
-    img = Image.open(image_file)
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=16)
-    pdf.cell(200, 10, txt=job_name, ln=True, align='C')
-    pdf.cell(200, 10, txt=title, ln=True, align='C')
-    img_path = f"temp_{title.replace(' ', '_')}.jpg"
-    img.save(img_path)
-    pdf.image(img_path, x=30, y=40, w=150)
-    os.remove(img_path)
-    return pdf.output(dest='S').encode('latin1')
-
+# Generate full report
 def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views):
+    logo, corner = load_overlay_assets()
     merger = PdfMerger()
 
-    # Page 1: Launcher.jpg
-    launcher_pdf = create_image_page("", "", launcher_img)
-    merger.append(io.BytesIO(launcher_pdf))
+    # Page 1: Launcher.jpg full-page
+    merger.append(io.BytesIO(full_page_image(launcher_img)))
 
-    # Pages 2–9: Launcher directional images
+    # Pages 2–9: Launcher directional views
     launcher_matched = match_directional_images(launcher_views, "launcher")
     for direction in direction_aliases:
         if direction in launcher_matched:
             title = f"Launcher {direction}"
-            page = create_image_page(job_name, title, launcher_matched[direction])
+            page = create_overlayed_page(job_name, title, launcher_matched[direction], logo, corner)
             merger.append(io.BytesIO(page))
 
-    # Page 10: Receiver.jpg
-    receiver_pdf = create_image_page("", "", receiver_img)
-    merger.append(io.BytesIO(receiver_pdf))
+    # Page 10: Receiver.jpg full-page
+    merger.append(io.BytesIO(full_page_image(receiver_img)))
 
-    # Pages 11–18: Receiver directional images
+    # Pages 11–18: Receiver directional views
     receiver_matched = match_directional_images(receiver_views, "receiver")
     for direction in direction_aliases:
         if direction in receiver_matched:
             title = f"Receiver {direction}"
-            page = create_image_page(job_name, title, receiver_matched[direction])
+            page = create_overlayed_page(job_name, title, receiver_matched[direction], logo, corner)
             merger.append(io.BytesIO(page))
 
     output = io.BytesIO()
