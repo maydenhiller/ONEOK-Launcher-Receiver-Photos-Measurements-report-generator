@@ -54,12 +54,12 @@ def create_directional_page(template_img, job_name, title, directional_img):
     except:
         font = ImageFont.load_default()
 
-    draw.text((W // 2, int(H * 0.20)), job_name, font=font, anchor="mm", fill="black")
-    draw.text((W // 2, int(H * 0.35)), title, font=font, anchor="mm", fill="black")
+    draw.text((W // 2, int(H * 0.18)), job_name, font=font, anchor="mm", fill="black")
+    draw.text((W // 2, int(H * 0.32)), title, font=font, anchor="mm", fill="black")
 
     directional = Image.open(directional_img).convert("RGB")
-    directional = directional.resize((int(W * 0.8), int(H * 0.5)))
-    canvas.paste(directional, (int(W * 0.1), int(H * 0.45)))
+    directional = directional.resize((1600, 1200))  # fixed size independent of canvas
+    canvas.paste(directional, (int((W - 1600) / 2), int(H * 0.45)))
 
     output = io.BytesIO()
     canvas.save(output, format="PDF")
