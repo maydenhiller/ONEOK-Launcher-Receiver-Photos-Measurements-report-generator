@@ -1,138 +1,122 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 from PyPDF2 import PdfMerger
-import fitz  # PyMuPDF
+import fitz
 import io
 import os
 import re
 
-# Directional aliases
+# Canonical directions and aliases
 direction_aliases = {
-    "East": ["east", "e", "le"],
-    "Northeast": ["northeast", "ne"],
     "North": ["north", "n"],
-    "Northwest": ["northwest", "nw"],
-    "West": ["west", "w"],
-    "Southwest": ["southwest", "sw"],
+    "Northeast": ["northeast", "ne"],
+    "East": ["east", "e"],
+    "Southeast": ["southeast", "se"],
     "South": ["south", "s"],
-    "Southeast": ["southeast", "se"]
+    "Southwest": ["southwest", "sw"],
+    "West": ["west", "w"],
+    "Northwest": ["northwest", "nw"]
 }
 
-def normalize_name(name: str) -> str:
-    # Lowercase and remove spaces, dashes, underscores, and file extension
+def normalize_name(name):
     base = os.path.splitext(name)[0]
     return re.sub(r"[\s\-_]+", "", base.lower())
 
 def match_directional_images(files, prefix):
     matched = {}
-    used_files = set()
-    for direction, aliases in direction_aliases.items():
-        for file in files:
-            norm_name = normalize_name(file.name)
-            if file in used_files:
-                continue
-            if prefix.lower() in norm_name and any(alias in norm_name for alias in aliases):
+    used = set()
+    for file in files:
+        norm = normalize_name(file.name)
+        if file in used or prefix.lower() not in norm:
+            continue
+        for direction, aliases in direction_aliases.items():
+            if any(alias in norm for alias in aliases):
                 matched[direction] = file
-                used_files.add(file)
+                used.add(file)
                 break
     return matched
 
 def extract_template_image(pdf_file):
     data = pdf_file.read()
     doc = fitz.open(stream=data, filetype="pdf")
-    page_index = 1 if doc.page_count > 1 else 0
-    page = doc.load_page(page_index)
+    page = doc.load_page(1 if doc.page_count > 1 else 0)
     pix = page.get_pixmap(dpi=200)
-    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-    return img
+    return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
 def full_page_image(image_file):
     img = Image.open(image_file).convert("RGB")
-    output = io.BytesIO()
-    img.save(output, format="PDF")
-    return output.getvalue()
+    buf = io.BytesIO()
+    img.save(buf, format="PDF")
+    return buf.getvalue()
 
-def load_font_or_fail(size: int) -> ImageFont.FreeTypeFont:
-    candidates = [
-        "fonts/LiberationSans-Regular.ttf",
-        "LiberationSans-Regular.ttf",
-    ]
-    for path in candidates:
+def load_font_or_fail(size):
+    paths = ["fonts/LiberationSans-Regular.ttf", "LiberationSans-Regular.ttf"]
+    for path in paths:
         if os.path.exists(path):
             return ImageFont.truetype(path, size=size)
-    raise FileNotFoundError(
-        "LiberationSans-Regular.ttf not found. Place it in either fonts/ or the repo root."
-    )
+    raise FileNotFoundError("LiberationSans-Regular.ttf not found.")
 
 def create_directional_page(template_img, job_name, title, directional_img):
     canvas = template_img.copy()
     W, H = canvas.size
     draw = ImageDraw.Draw(canvas)
+    font = load_font_or_fail(50)
 
-    font = load_font_or_fail(size=50)  # fixed font size
-
-    # Job title high, picture title close beneath it
     draw.text((W // 2, int(H * 0.07)), job_name, font=font, anchor="mm", fill="black")
     draw.text((W // 2, int(H * 0.11)), title, font=font, anchor="mm", fill="black")
 
-    # Image position
-    directional = Image.open(directional_img).convert("RGB")
-    target_w, target_h = 1600, 1200
-    directional = directional.resize((target_w, target_h))
-    canvas.paste(directional, (int((W - target_w) / 2), int(H * 0.165)))
+    directional = Image.open(directional_img).convert("RGB").resize((1600, 1200))
+    canvas.paste(directional, (int((W - 1600) / 2), int(H * 0.165)))
 
-    output = io.BytesIO()
-    canvas.save(output, format="PDF")
-    return output.getvalue()
+    buf = io.BytesIO()
+    canvas.save(buf, format="PDF")
+    return buf.getvalue()
 
 def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf):
     template_img = extract_template_image(template_pdf)
     merger = PdfMerger()
 
     merger.append(io.BytesIO(full_page_image(launcher_img)))
-
     launcher_matched = match_directional_images(launcher_views, "launcher")
     for direction in direction_aliases:
         if direction in launcher_matched:
-            title = f"Launcher {direction}"
-            page = create_directional_page(template_img, job_name, title, launcher_matched[direction])
+            page = create_directional_page(template_img, job_name, f"Launcher {direction}", launcher_matched[direction])
             merger.append(io.BytesIO(page))
 
     merger.append(io.BytesIO(full_page_image(receiver_img)))
-
     receiver_matched = match_directional_images(receiver_views, "receiver")
     for direction in direction_aliases:
         if direction in receiver_matched:
-            title = f"Receiver {direction}"
-            page = create_directional_page(template_img, job_name, title, receiver_matched[direction])
+            page = create_directional_page(template_img, job_name, f"Receiver {direction}", receiver_matched[direction])
             merger.append(io.BytesIO(page))
 
-    output = io.BytesIO()
-    merger.write(output)
+    buf = io.BytesIO()
+    merger.write(buf)
     merger.close()
-    return output
+    return buf
 
 st.set_page_config(page_title="Gibson/Oneok Report Generator", layout="centered")
 st.title("📄 Gibson/Oneok Report Generator")
 
 job_name = st.text_input("Enter Job Name")
-template_pdf = st.file_uploader("Upload Template PDF (with branding)", type=["pdf"])
-all_images = st.file_uploader("Upload All 18 Images (Launcher.jpg, Receiver.jpg, and 16 directional views)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+template_pdf = st.file_uploader("Upload Template PDF", type=["pdf"])
+all_images = st.file_uploader("Upload 18 Images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 if st.button("Generate Report"):
     if not job_name or not template_pdf or not all_images or len(all_images) != 18:
         st.error("Please upload the template PDF, exactly 18 images, and enter a job name.")
     else:
-        launcher_img = next((f for f in all_images if normalize_name(f.name) == "launcher"), None)
-        receiver_img = next((f for f in all_images if normalize_name(f.name) == "receiver"), None)
-        directional_imgs = [f for f in all_images if f not in [launcher_img, receiver_img]]
+        launcher_img = next((f for f in all_images if f.name.lower().strip() == "launcher.jpg"), None)
+        receiver_img = next((f for f in all_images if f.name.lower().strip() == "receiver.jpg"), None)
 
-        if not launcher_img or not receiver_img or len(directional_imgs) != 16:
-            st.error("Make sure Launcher.jpg and Receiver.jpg are included, plus 16 directional images.")
+        if not launcher_img or not receiver_img:
+            st.error("Launcher.jpg and Receiver.jpg must be included.")
         else:
+            directional_imgs = [f for f in all_images if f not in [launcher_img, receiver_img]]
+            launcher_views = [f for f in directional_imgs if "launcher" in normalize_name(f.name)]
+            receiver_views = [f for f in directional_imgs if "receiver" in normalize_name(f.name)]
+
             try:
-                launcher_views = [f for f in directional_imgs if "launcher" in normalize_name(f.name)]
-                receiver_views = [f for f in directional_imgs if "receiver" in normalize_name(f.name)]
                 report = generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf)
                 st.success("✅ Report generated successfully!")
                 st.download_button("📥 Download Report", data=report, file_name="Final_Report.pdf", mime="application/pdf")
