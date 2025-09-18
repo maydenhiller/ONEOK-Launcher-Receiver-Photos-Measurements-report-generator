@@ -46,7 +46,7 @@ def full_page_image(image_file):
     return output.getvalue()
 
 def load_font(size):
-    font_path = os.path.join("fonts", "LiberationSans-Regular.ttf")
+    font_path = os.path.join(os.path.dirname(__file__), "fonts", "LiberationSans-Regular.ttf")
     if os.path.exists(font_path):
         return ImageFont.truetype(font_path, size=size)
     else:
