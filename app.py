@@ -50,12 +50,13 @@ def create_directional_page(template_img, job_name, title, directional_img):
     draw = ImageDraw.Draw(canvas)
 
     try:
-        font = ImageFont.truetype("arial.ttf", size=36)
+        font = ImageFont.truetype("arial.ttf", size=72)  # doubled size
     except:
         font = ImageFont.load_default()
 
-    draw.text((W // 2, 40), job_name, font=font, anchor="mm", fill="black")
-    draw.text((W // 2, 100), title, font=font, anchor="mm", fill="black")
+    # Lower vertical placement
+    draw.text((W // 2, int(H * 0.08)), job_name, font=font, anchor="mm", fill="black")
+    draw.text((W // 2, int(H * 0.15)), title, font=font, anchor="mm", fill="black")
 
     directional = Image.open(directional_img).convert("RGB")
     directional = directional.resize((int(W * 0.8), int(H * 0.6)))
