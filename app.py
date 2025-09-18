@@ -5,6 +5,9 @@ import fitz
 import io
 import os
 
+# Path to your stored template in the repo
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "template.pdf")
+
 # Strict mapping of page order to allowed filenames (lowercase for matching)
 launcher_order = [
     ["launcher.jpg"],  # Page 1
@@ -30,8 +33,9 @@ receiver_order = [
     ["receiver southeast.jpg", "receiver se.jpg", "rse.jpg"],  # Page 18
 ]
 
-def extract_template_image(pdf_file):
-    data = pdf_file.read()
+def extract_template_image_from_path(path):
+    with open(path, "rb") as f:
+        data = f.read()
     doc = fitz.open(stream=data, filetype="pdf")
     page = doc.load_page(1 if doc.page_count > 1 else 0)
     pix = page.get_pixmap(dpi=200)
@@ -73,8 +77,8 @@ def find_file(files, allowed_names):
             return f
     return None
 
-def generate_report(job_name, all_images, template_pdf):
-    template_img = extract_template_image(template_pdf)
+def generate_report(job_name, all_images):
+    template_img = extract_template_image_from_path(TEMPLATE_PATH)
     merger = PdfMerger()
 
     # Launcher pages
@@ -85,7 +89,6 @@ def generate_report(job_name, all_images, template_pdf):
         if idx == 1:
             merger.append(io.BytesIO(full_page_image(f)))
         else:
-            # Capitalize only the first letter of the direction
             direction = allowed_names[0].split()[1].replace('.jpg', '').capitalize()
             title = f"Launcher {direction}"
             page = create_directional_page(template_img, job_name, title, f)
@@ -99,7 +102,6 @@ def generate_report(job_name, all_images, template_pdf):
         if idx == 10:
             merger.append(io.BytesIO(full_page_image(f)))
         else:
-            # Capitalize only the first letter of the direction
             direction = allowed_names[0].split()[1].replace('.jpg', '').capitalize()
             title = f"Receiver {direction}"
             page = create_directional_page(template_img, job_name, title, f)
@@ -115,15 +117,14 @@ st.set_page_config(page_title="Strict 18-Page Report Generator", layout="centere
 st.title("📄 Strict 18-Page Report Generator")
 
 job_name = st.text_input("Enter Job Name")
-template_pdf = st.file_uploader("Upload Template PDF", type=["pdf"])
 all_images = st.file_uploader("Upload All 18 Images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 if st.button("Generate Report"):
     try:
-        if not job_name or not template_pdf or not all_images or len(all_images) != 18:
-            st.error("Please upload the template PDF, exactly 18 images, and enter a job name.")
+        if not job_name or not all_images or len(all_images) != 18:
+            st.error("Please upload exactly 18 images and enter a job name.")
         else:
-            report = generate_report(job_name, all_images, template_pdf)
+            report = generate_report(job_name, all_images)
             st.success("✅ Report generated successfully!")
             st.download_button("📥 Download Report", data=report, file_name="Final_Report.pdf", mime="application/pdf")
     except Exception as e:
