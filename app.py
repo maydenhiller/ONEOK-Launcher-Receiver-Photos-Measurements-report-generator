@@ -2,6 +2,7 @@ import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 from PyPDF2 import PdfReader, PdfMerger
 import io
+import fitz  # PyMuPDF
 
 # Directional aliases
 direction_aliases = {
@@ -30,12 +31,13 @@ def match_directional_images(files, prefix):
                 break
     return matched
 
-# Convert PDF page to image
-def extract_template_page(pdf_file, page_number=1):
-    reader = PdfReader(pdf_file)
-    page = reader.pages[page_number]
-    image = page.to_image(resolution=200)
-    return image.original.convert("RGB")
+# Extract page 2 from PDF as image
+def extract_template_image(pdf_file):
+    doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+    page = doc.load_page(1)  # Page 2 (0-indexed)
+    pix = page.get_pixmap(dpi=200)
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    return img
 
 # Create full-page image PDF
 def full_page_image(image_file):
@@ -58,7 +60,6 @@ def create_directional_page(template_img, job_name, title, directional_img):
     draw.text((W // 2, 40), job_name, font=font, anchor="mm", fill="black")
     draw.text((W // 2, 100), title, font=font, anchor="mm", fill="black")
 
-    # Resize and paste directional image
     directional = Image.open(directional_img).convert("RGB")
     directional = directional.resize((int(W * 0.8), int(H * 0.6)))
     canvas.paste(directional, (int(W * 0.1), int(H * 0.25)))
@@ -69,7 +70,7 @@ def create_directional_page(template_img, job_name, title, directional_img):
 
 # Generate full report
 def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf):
-    template_img = extract_template_page(template_pdf, page_number=1)
+    template_img = extract_template_image(template_pdf)
     merger = PdfMerger()
 
     # Page 1: Launcher.jpg full-page
@@ -104,7 +105,7 @@ st.set_page_config(page_title="Gibson/Oneok Report Generator", layout="centered"
 st.title("📄 Gibson/Oneok Report Generator")
 
 job_name = st.text_input("Enter Job Name")
-template_pdf = st.file_uploader("Upload Original Template PDF", type=["pdf"])
+template_pdf = st.file_uploader("Upload Template PDF (with branding)", type=["pdf"])
 all_images = st.file_uploader("Upload All 18 Images (Launcher.jpg, Receiver.jpg, and 16 directional views)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 if st.button("Generate Report"):
