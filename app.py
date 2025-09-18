@@ -65,15 +65,15 @@ def create_directional_page(template_img, job_name, title, directional_img):
 
     font = load_font_or_fail(size=50)  # fixed font size
 
-    # Move text up by ~1 inch (reduced Y ratios)
+    # Job title high, picture title closer (reduced gap)
     draw.text((W // 2, int(H * 0.07)), job_name, font=font, anchor="mm", fill="black")
-    draw.text((W // 2, int(H * 0.15)), title, font=font, anchor="mm", fill="black")
+    draw.text((W // 2, int(H * 0.12)), title, font=font, anchor="mm", fill="black")
 
-    # Move image upward toward center by ~1 inch
+    # Image moved up ~1 more inch
     directional = Image.open(directional_img).convert("RGB")
     target_w, target_h = 1600, 1200
     directional = directional.resize((target_w, target_h))
-    canvas.paste(directional, (int((W - target_w) / 2), int(H * 0.23)))
+    canvas.paste(directional, (int((W - target_w) / 2), int(H * 0.18)))
 
     output = io.BytesIO()
     canvas.save(output, format="PDF")
