@@ -2,7 +2,6 @@ import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 from PyPDF2 import PdfMerger
 import io
-import os
 
 # Directional aliases
 direction_aliases = {
@@ -15,47 +14,6 @@ direction_aliases = {
     "South": ["south", "s", "l s"],
     "Southeast": ["southeast", "se", "l se"]
 }
-
-# Load branding assets
-def load_overlay_assets():
-    logo = Image.open("assets/oneok_logo.png").convert("RGBA").resize((200, 80))
-    corner = Image.open("assets/gibson_corner.png").convert("RGBA").resize((80, 80))
-    return logo, corner
-
-# Create full-page image PDF
-def full_page_image(image_file):
-    img = Image.open(image_file).convert("RGB")
-    output = io.BytesIO()
-    img.save(output, format="PDF")
-    return output.getvalue()
-
-# Create directional page with overlays
-def create_overlayed_page(job_name, title, image_file, logo, corner):
-    base = Image.open(image_file).convert("RGB")
-    W, H = base.size
-    draw = ImageDraw.Draw(base)
-
-    # Font setup
-    try:
-        font = ImageFont.truetype("arial.ttf", size=36)
-    except:
-        font = ImageFont.load_default()
-
-    # Text
-    draw.text((W // 2, 40), job_name, font=font, anchor="mm", fill="black")
-    draw.text((W // 2, 100), title, font=font, anchor="mm", fill="black")
-
-    # Overlays
-    base.paste(logo, ((W - logo.width) // 2, 10), logo)
-    base.paste(corner, (0, 0), corner)
-    base.paste(corner, (W - corner.width, 0), corner)
-    base.paste(corner, (0, H - corner.height), corner)
-    base.paste(corner, (W - corner.width, H - corner.height), corner)
-
-    # Save to PDF
-    output = io.BytesIO()
-    base.save(output, format="PDF")
-    return output.getvalue()
 
 # Match directional images
 def match_directional_images(files, prefix):
@@ -72,9 +30,35 @@ def match_directional_images(files, prefix):
                 break
     return matched
 
+# Create full-page image PDF
+def full_page_image(image_file):
+    img = Image.open(image_file).convert("RGB")
+    output = io.BytesIO()
+    img.save(output, format="PDF")
+    return output.getvalue()
+
+# Create directional page styled like template
+def create_directional_page(job_name, title, image_file):
+    base = Image.open(image_file).convert("RGB")
+    W, H = base.size
+    canvas = Image.new("RGB", (W, H + 200), "white")
+    canvas.paste(base, (0, 200))
+
+    draw = ImageDraw.Draw(canvas)
+    try:
+        font = ImageFont.truetype("arial.ttf", size=36)
+    except:
+        font = ImageFont.load_default()
+
+    draw.text((W // 2, 40), job_name, font=font, anchor="mm", fill="black")
+    draw.text((W // 2, 100), title, font=font, anchor="mm", fill="black")
+
+    output = io.BytesIO()
+    canvas.save(output, format="PDF")
+    return output.getvalue()
+
 # Generate full report
 def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views):
-    logo, corner = load_overlay_assets()
     merger = PdfMerger()
 
     # Page 1: Launcher.jpg full-page
@@ -85,7 +69,7 @@ def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiv
     for direction in direction_aliases:
         if direction in launcher_matched:
             title = f"Launcher {direction}"
-            page = create_overlayed_page(job_name, title, launcher_matched[direction], logo, corner)
+            page = create_directional_page(job_name, title, launcher_matched[direction])
             merger.append(io.BytesIO(page))
 
     # Page 10: Receiver.jpg full-page
@@ -96,7 +80,7 @@ def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiv
     for direction in direction_aliases:
         if direction in receiver_matched:
             title = f"Receiver {direction}"
-            page = create_overlayed_page(job_name, title, receiver_matched[direction], logo, corner)
+            page = create_directional_page(job_name, title, receiver_matched[direction])
             merger.append(io.BytesIO(page))
 
     output = io.BytesIO()
