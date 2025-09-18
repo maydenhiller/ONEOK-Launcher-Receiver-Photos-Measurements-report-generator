@@ -6,7 +6,6 @@ import io
 import os
 import re
 
-# Canonical directions and aliases
 direction_aliases = {
     "North": ["north", "n"],
     "Northeast": ["northeast", "ne"],
@@ -26,9 +25,10 @@ def match_directional_images(files, prefix):
     matched = {}
     used = set()
     for file in files:
-        norm = normalize_name(file.name)
-        if file in used or prefix.lower() not in norm:
+        name = file.name.lower()
+        if file in used or prefix not in name:
             continue
+        norm = normalize_name(file.name)
         for direction, aliases in direction_aliases.items():
             if any(alias in norm for alias in aliases):
                 matched[direction] = file
@@ -72,19 +72,19 @@ def create_directional_page(template_img, job_name, title, directional_img):
     canvas.save(buf, format="PDF")
     return buf.getvalue()
 
-def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf):
+def generate_report(job_name, launcher_img, receiver_img, directional_imgs, template_pdf):
     template_img = extract_template_image(template_pdf)
     merger = PdfMerger()
 
     merger.append(io.BytesIO(full_page_image(launcher_img)))
-    launcher_matched = match_directional_images(launcher_views, "launcher")
+    launcher_matched = match_directional_images(directional_imgs, "launcher")
     for direction in direction_aliases:
         if direction in launcher_matched:
             page = create_directional_page(template_img, job_name, f"Launcher {direction}", launcher_matched[direction])
             merger.append(io.BytesIO(page))
 
     merger.append(io.BytesIO(full_page_image(receiver_img)))
-    receiver_matched = match_directional_images(receiver_views, "receiver")
+    receiver_matched = match_directional_images(directional_imgs, "receiver")
     for direction in direction_aliases:
         if direction in receiver_matched:
             page = create_directional_page(template_img, job_name, f"Receiver {direction}", receiver_matched[direction])
@@ -113,11 +113,8 @@ if st.button("Generate Report"):
             st.error("Launcher.jpg and Receiver.jpg must be included.")
         else:
             directional_imgs = [f for f in all_images if f not in [launcher_img, receiver_img]]
-            launcher_views = [f for f in directional_imgs if "launcher" in normalize_name(f.name)]
-            receiver_views = [f for f in directional_imgs if "receiver" in normalize_name(f.name)]
-
             try:
-                report = generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf)
+                report = generate_report(job_name, launcher_img, receiver_img, directional_imgs, template_pdf)
                 st.success("✅ Report generated successfully!")
                 st.download_button("📥 Download Report", data=report, file_name="Final_Report.pdf", mime="application/pdf")
             except Exception as e:
