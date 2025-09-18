@@ -26,9 +26,9 @@ def match_directional_images(files, prefix):
     used = set()
     for file in files:
         name = file.name.lower()
+        norm = normalize_name(file.name)
         if file in used or prefix not in name:
             continue
-        norm = normalize_name(file.name)
         for direction, aliases in direction_aliases.items():
             if any(alias in norm for alias in aliases):
                 matched[direction] = file
