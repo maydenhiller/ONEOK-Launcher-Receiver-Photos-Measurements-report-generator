@@ -1,8 +1,8 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
-from PyPDF2 import PdfReader, PdfMerger
-import io
+from PyPDF2 import PdfMerger
 import fitz  # PyMuPDF
+import io
 
 # Directional aliases
 direction_aliases = {
@@ -16,7 +16,6 @@ direction_aliases = {
     "Southeast": ["southeast", "se", "l se"]
 }
 
-# Match directional images
 def match_directional_images(files, prefix):
     matched = {}
     used_files = set()
@@ -31,22 +30,20 @@ def match_directional_images(files, prefix):
                 break
     return matched
 
-# Extract page 2 from PDF as image
 def extract_template_image(pdf_file):
     doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
-    page = doc.load_page(1)  # Page 2 (0-indexed)
+    page_index = 1 if doc.page_count > 1 else 0
+    page = doc.load_page(page_index)
     pix = page.get_pixmap(dpi=200)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     return img
 
-# Create full-page image PDF
 def full_page_image(image_file):
     img = Image.open(image_file).convert("RGB")
     output = io.BytesIO()
     img.save(output, format="PDF")
     return output.getvalue()
 
-# Create directional page using template
 def create_directional_page(template_img, job_name, title, directional_img):
     canvas = template_img.copy()
     W, H = canvas.size
@@ -68,15 +65,12 @@ def create_directional_page(template_img, job_name, title, directional_img):
     canvas.save(output, format="PDF")
     return output.getvalue()
 
-# Generate full report
 def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf):
     template_img = extract_template_image(template_pdf)
     merger = PdfMerger()
 
-    # Page 1: Launcher.jpg full-page
     merger.append(io.BytesIO(full_page_image(launcher_img)))
 
-    # Pages 2–9: Launcher directional views
     launcher_matched = match_directional_images(launcher_views, "launcher")
     for direction in direction_aliases:
         if direction in launcher_matched:
@@ -84,10 +78,8 @@ def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiv
             page = create_directional_page(template_img, job_name, title, launcher_matched[direction])
             merger.append(io.BytesIO(page))
 
-    # Page 10: Receiver.jpg full-page
     merger.append(io.BytesIO(full_page_image(receiver_img)))
 
-    # Pages 11–18: Receiver directional views
     receiver_matched = match_directional_images(receiver_views, "receiver")
     for direction in direction_aliases:
         if direction in receiver_matched:
@@ -100,7 +92,6 @@ def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiv
     merger.close()
     return output
 
-# Streamlit UI
 st.set_page_config(page_title="Gibson/Oneok Report Generator", layout="centered")
 st.title("📄 Gibson/Oneok Report Generator")
 
