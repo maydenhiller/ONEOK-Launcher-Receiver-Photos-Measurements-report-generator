@@ -4,28 +4,34 @@ from PyPDF2 import PdfMerger
 import fitz  # PyMuPDF
 import io
 import os
+import re
 
 # Directional aliases
 direction_aliases = {
-    "East": ["east", "e", "le", "l east"],
-    "Northeast": ["northeast", "ne", "l ne"],
-    "North": ["north", "n", "l n"],
-    "Northwest": ["northwest", "nw", "l nw"],
-    "West": ["west", "w", "l w"],
-    "Southwest": ["southwest", "sw", "l sw"],
-    "South": ["south", "s", "l s"],
-    "Southeast": ["southeast", "se", "l se"]
+    "East": ["east", "e", "le"],
+    "Northeast": ["northeast", "ne"],
+    "North": ["north", "n"],
+    "Northwest": ["northwest", "nw"],
+    "West": ["west", "w"],
+    "Southwest": ["southwest", "sw"],
+    "South": ["south", "s"],
+    "Southeast": ["southeast", "se"]
 }
+
+def normalize_name(name: str) -> str:
+    # Lowercase and remove spaces, dashes, underscores, and file extension
+    base = os.path.splitext(name)[0]
+    return re.sub(r"[\s\-_]+", "", base.lower())
 
 def match_directional_images(files, prefix):
     matched = {}
     used_files = set()
     for direction, aliases in direction_aliases.items():
         for file in files:
-            name = file.name.lower()
+            norm_name = normalize_name(file.name)
             if file in used_files:
                 continue
-            if prefix.lower() in name and any(alias in name for alias in aliases):
+            if prefix.lower() in norm_name and any(alias in norm_name for alias in aliases):
                 matched[direction] = file
                 used_files.add(file)
                 break
@@ -69,7 +75,7 @@ def create_directional_page(template_img, job_name, title, directional_img):
     draw.text((W // 2, int(H * 0.07)), job_name, font=font, anchor="mm", fill="black")
     draw.text((W // 2, int(H * 0.11)), title, font=font, anchor="mm", fill="black")
 
-    # Image moved up an additional ~1/4 inch from previous version
+    # Image position
     directional = Image.open(directional_img).convert("RGB")
     target_w, target_h = 1600, 1200
     directional = directional.resize((target_w, target_h))
@@ -117,16 +123,16 @@ if st.button("Generate Report"):
     if not job_name or not template_pdf or not all_images or len(all_images) != 18:
         st.error("Please upload the template PDF, exactly 18 images, and enter a job name.")
     else:
-        launcher_img = next((f for f in all_images if f.name.lower() == "launcher.jpg"), None)
-        receiver_img = next((f for f in all_images if f.name.lower() == "receiver.jpg"), None)
+        launcher_img = next((f for f in all_images if normalize_name(f.name) == "launcher"), None)
+        receiver_img = next((f for f in all_images if normalize_name(f.name) == "receiver"), None)
         directional_imgs = [f for f in all_images if f not in [launcher_img, receiver_img]]
 
         if not launcher_img or not receiver_img or len(directional_imgs) != 16:
             st.error("Make sure Launcher.jpg and Receiver.jpg are included, plus 16 directional images.")
         else:
             try:
-                launcher_views = [f for f in directional_imgs if "launcher" in f.name.lower()]
-                receiver_views = [f for f in directional_imgs if "receiver" in f.name.lower()]
+                launcher_views = [f for f in directional_imgs if "launcher" in normalize_name(f.name)]
+                receiver_views = [f for f in directional_imgs if "receiver" in normalize_name(f.name)]
                 report = generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf)
                 st.success("✅ Report generated successfully!")
                 st.download_button("📥 Download Report", data=report, file_name="Final_Report.pdf", mime="application/pdf")
