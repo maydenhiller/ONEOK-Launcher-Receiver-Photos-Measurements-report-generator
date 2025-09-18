@@ -6,7 +6,7 @@ import io
 import os
 
 # Path to your stored template in the repo
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "template.pdf")
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "Directional Photo Template.pdf")
 
 # Strict mapping of page order to allowed filenames (lowercase for matching)
 launcher_order = [
