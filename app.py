@@ -1,6 +1,6 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
-from PyPDF2 import PdfMerger
+from PyPDF2 import PdfReader, PdfMerger
 import io
 
 # Directional aliases
@@ -30,6 +30,13 @@ def match_directional_images(files, prefix):
                 break
     return matched
 
+# Convert PDF page to image
+def extract_template_page(pdf_file, page_number=1):
+    reader = PdfReader(pdf_file)
+    page = reader.pages[page_number]
+    image = page.to_image(resolution=200)
+    return image.original.convert("RGB")
+
 # Create full-page image PDF
 def full_page_image(image_file):
     img = Image.open(image_file).convert("RGB")
@@ -37,14 +44,12 @@ def full_page_image(image_file):
     img.save(output, format="PDF")
     return output.getvalue()
 
-# Create directional page styled like template
-def create_directional_page(job_name, title, image_file):
-    base = Image.open(image_file).convert("RGB")
-    W, H = base.size
-    canvas = Image.new("RGB", (W, H + 200), "white")
-    canvas.paste(base, (0, 200))
-
+# Create directional page using template
+def create_directional_page(template_img, job_name, title, directional_img):
+    canvas = template_img.copy()
+    W, H = canvas.size
     draw = ImageDraw.Draw(canvas)
+
     try:
         font = ImageFont.truetype("arial.ttf", size=36)
     except:
@@ -53,12 +58,18 @@ def create_directional_page(job_name, title, image_file):
     draw.text((W // 2, 40), job_name, font=font, anchor="mm", fill="black")
     draw.text((W // 2, 100), title, font=font, anchor="mm", fill="black")
 
+    # Resize and paste directional image
+    directional = Image.open(directional_img).convert("RGB")
+    directional = directional.resize((int(W * 0.8), int(H * 0.6)))
+    canvas.paste(directional, (int(W * 0.1), int(H * 0.25)))
+
     output = io.BytesIO()
     canvas.save(output, format="PDF")
     return output.getvalue()
 
 # Generate full report
-def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views):
+def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf):
+    template_img = extract_template_page(template_pdf, page_number=1)
     merger = PdfMerger()
 
     # Page 1: Launcher.jpg full-page
@@ -69,7 +80,7 @@ def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiv
     for direction in direction_aliases:
         if direction in launcher_matched:
             title = f"Launcher {direction}"
-            page = create_directional_page(job_name, title, launcher_matched[direction])
+            page = create_directional_page(template_img, job_name, title, launcher_matched[direction])
             merger.append(io.BytesIO(page))
 
     # Page 10: Receiver.jpg full-page
@@ -80,7 +91,7 @@ def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiv
     for direction in direction_aliases:
         if direction in receiver_matched:
             title = f"Receiver {direction}"
-            page = create_directional_page(job_name, title, receiver_matched[direction])
+            page = create_directional_page(template_img, job_name, title, receiver_matched[direction])
             merger.append(io.BytesIO(page))
 
     output = io.BytesIO()
@@ -93,11 +104,12 @@ st.set_page_config(page_title="Gibson/Oneok Report Generator", layout="centered"
 st.title("📄 Gibson/Oneok Report Generator")
 
 job_name = st.text_input("Enter Job Name")
+template_pdf = st.file_uploader("Upload Original Template PDF", type=["pdf"])
 all_images = st.file_uploader("Upload All 18 Images (Launcher.jpg, Receiver.jpg, and 16 directional views)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 if st.button("Generate Report"):
-    if not job_name or len(all_images) != 18:
-        st.error("Please upload exactly 18 images and enter a job name.")
+    if not job_name or not template_pdf or len(all_images) != 18:
+        st.error("Please upload the template PDF, exactly 18 images, and enter a job name.")
     else:
         launcher_img = next((f for f in all_images if f.name.lower() == "launcher.jpg"), None)
         receiver_img = next((f for f in all_images if f.name.lower() == "receiver.jpg"), None)
@@ -108,6 +120,6 @@ if st.button("Generate Report"):
         else:
             launcher_views = [f for f in directional_imgs if "launcher" in f.name.lower()]
             receiver_views = [f for f in directional_imgs if "receiver" in f.name.lower()]
-            report = generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views)
+            report = generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf)
             st.success("✅ Report generated successfully!")
             st.download_button("📥 Download Report", data=report, file_name="Final_Report.pdf", mime="application/pdf")
