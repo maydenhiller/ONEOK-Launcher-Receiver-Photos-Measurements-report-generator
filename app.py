@@ -49,16 +49,17 @@ def create_directional_page(template_img, job_name, title, directional_img):
     W, H = canvas.size
     draw = ImageDraw.Draw(canvas)
 
-    try:
-        font = ImageFont.truetype("arial.ttf", size=800)
-    except:
-        font = ImageFont.load_default()
+    # Load real font
+    font_path = "fonts/LiberationSans-Regular.ttf"
+    font = ImageFont.truetype(font_path, size=800)
 
+    # Draw text lower on the page
     draw.text((W // 2, int(H * 0.18)), job_name, font=font, anchor="mm", fill="black")
     draw.text((W // 2, int(H * 0.32)), title, font=font, anchor="mm", fill="black")
 
+    # Fixed image size
     directional = Image.open(directional_img).convert("RGB")
-    directional = directional.resize((1600, 1200))  # fixed size independent of canvas
+    directional = directional.resize((1600, 1200))
     canvas.paste(directional, (int((W - 1600) / 2), int(H * 0.45)))
 
     output = io.BytesIO()
