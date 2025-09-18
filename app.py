@@ -69,11 +69,11 @@ def create_directional_page(template_img, job_name, title, directional_img):
     draw.text((W // 2, int(H * 0.07)), job_name, font=font, anchor="mm", fill="black")
     draw.text((W // 2, int(H * 0.11)), title, font=font, anchor="mm", fill="black")
 
-    # Image moved up ~¼ inch from previous version
+    # Image moved up an additional ~1/4 inch from previous version
     directional = Image.open(directional_img).convert("RGB")
     target_w, target_h = 1600, 1200
     directional = directional.resize((target_w, target_h))
-    canvas.paste(directional, (int((W - target_w) / 2), int(H * 0.17)))
+    canvas.paste(directional, (int((W - target_w) / 2), int(H * 0.165)))
 
     output = io.BytesIO()
     canvas.save(output, format="PDF")
