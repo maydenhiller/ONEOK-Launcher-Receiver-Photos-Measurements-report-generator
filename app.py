@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 from PyPDF2 import PdfMerger
 import fitz  # PyMuPDF
 import io
-import os
+from pathlib import Path
 
 # Directional aliases
 direction_aliases = {
@@ -46,11 +46,11 @@ def full_page_image(image_file):
     return output.getvalue()
 
 def load_font(size):
-    font_path = os.path.join(os.path.dirname(__file__), "fonts", "LiberationSans-Regular.ttf")
-    if os.path.exists(font_path):
-        return ImageFont.truetype(font_path, size=size)
+    font_path = Path(__file__).parent / "fonts" / "LiberationSans-Regular.ttf"
+    if font_path.exists():
+        return ImageFont.truetype(str(font_path), size=size)
     else:
-        raise FileNotFoundError("Font file not found. Please place LiberationSans-Regular.ttf in the fonts/ folder.")
+        raise FileNotFoundError(f"Font file not found at {font_path}. Please place LiberationSans-Regular.ttf in the fonts/ folder.")
 
 def create_directional_page(template_img, job_name, title, directional_img):
     canvas = template_img.copy()
