@@ -4,37 +4,31 @@ from PyPDF2 import PdfMerger
 import fitz
 import io
 import os
-import re
 
-direction_aliases = {
-    "North": ["north", "n"],
-    "Northeast": ["northeast", "ne"],
-    "East": ["east", "e"],
-    "Southeast": ["southeast", "se"],
-    "South": ["south", "s"],
-    "Southwest": ["southwest", "sw"],
-    "West": ["west", "w"],
-    "Northwest": ["northwest", "nw"]
-}
+# Strict mapping of page order to allowed filenames (lowercase for matching)
+launcher_order = [
+    ["launcher.jpg"],  # Page 1
+    ["launcher east.jpg", "launcher e.jpg", "launch e.jpg", "le.jpg"],  # Page 2
+    ["launcher northeast.jpg", "launcher ne.jpg", "launch ne.jpg", "lne.jpg"],  # Page 3
+    ["launcher north.jpg", "launcher n.jpg", "launch n.jpg", "ln.jpg"],  # Page 4
+    ["launcher northwest.jpg", "launcher nw.jpg", "launch nw.jpg", "lnw.jpg"],  # Page 5
+    ["launcher west.jpg", "launcher w.jpg", "launch w.jpg", "lw.jpg"],  # Page 6
+    ["launcher southwest.jpg", "launcher sw.jpg", "launch sw.jpg", "lsw.jpg"],  # Page 7
+    ["launcher south.jpg", "launcher s.jpg", "launch s.jpg", "ls.jpg"],  # Page 8
+    ["launcher southeast.jpg", "launcher se.jpg", "launch se.jpg", "lse.jpg"],  # Page 9
+]
 
-def normalize_name(name):
-    base = os.path.splitext(name)[0]
-    return re.sub(r"[\s\-_]+", "", base.lower())
-
-def match_directional_images(files, prefix):
-    matched = {}
-    used = set()
-    for file in files:
-        name = file.name.lower()
-        norm = normalize_name(file.name)
-        if file in used or prefix not in name:
-            continue
-        for direction, aliases in direction_aliases.items():
-            if any(alias in norm for alias in aliases):
-                matched[direction] = file
-                used.add(file)
-                break
-    return matched
+receiver_order = [
+    ["receiver.jpg"],  # Page 10
+    ["receiver east.jpg", "receiver e.jpg", "re.jpg"],  # Page 11
+    ["receiver northeast.jpg", "receiver ne.jpg", "rne.jpg"],  # Page 12
+    ["receiver north.jpg", "receiver n.jpg", "rn.jpg"],  # Page 13
+    ["receiver northwest.jpg", "receiver nw.jpg", "rnw.jpg"],  # Page 14
+    ["receiver west.jpg", "receiver w.jpg", "rw.jpg"],  # Page 15
+    ["receiver southwest.jpg", "receiver sw.jpg", "rsw.jpg"],  # Page 16
+    ["receiver south.jpg", "receiver s.jpg", "rs.jpg"],  # Page 17
+    ["receiver southeast.jpg", "receiver se.jpg", "rse.jpg"],  # Page 18
+]
 
 def extract_template_image(pdf_file):
     data = pdf_file.read()
@@ -72,22 +66,39 @@ def create_directional_page(template_img, job_name, title, directional_img):
     canvas.save(buf, format="PDF")
     return buf.getvalue()
 
-def generate_report(job_name, launcher_img, receiver_img, directional_imgs, template_pdf):
+def find_file(files, allowed_names):
+    allowed = [name.lower() for name in allowed_names]
+    for f in files:
+        if f.name.lower() in allowed:
+            return f
+    return None
+
+def generate_report(job_name, all_images, template_pdf):
     template_img = extract_template_image(template_pdf)
     merger = PdfMerger()
 
-    merger.append(io.BytesIO(full_page_image(launcher_img)))
-    launcher_matched = match_directional_images(directional_imgs, "launcher")
-    for direction in direction_aliases:
-        if direction in launcher_matched:
-            page = create_directional_page(template_img, job_name, f"Launcher {direction}", launcher_matched[direction])
+    # Launcher pages
+    for idx, allowed_names in enumerate(launcher_order, start=1):
+        f = find_file(all_images, allowed_names)
+        if not f:
+            raise FileNotFoundError(f"Missing file for Launcher page {idx}: one of {allowed_names}")
+        if idx == 1:
+            merger.append(io.BytesIO(full_page_image(f)))
+        else:
+            title = f"Launcher {allowed_names[0].split()[1].replace('.jpg','').upper()}"
+            page = create_directional_page(template_img, job_name, title, f)
             merger.append(io.BytesIO(page))
 
-    merger.append(io.BytesIO(full_page_image(receiver_img)))
-    receiver_matched = match_directional_images(directional_imgs, "receiver")
-    for direction in direction_aliases:
-        if direction in receiver_matched:
-            page = create_directional_page(template_img, job_name, f"Receiver {direction}", receiver_matched[direction])
+    # Receiver pages
+    for idx, allowed_names in enumerate(receiver_order, start=10):
+        f = find_file(all_images, allowed_names)
+        if not f:
+            raise FileNotFoundError(f"Missing file for Receiver page {idx}: one of {allowed_names}")
+        if idx == 10:
+            merger.append(io.BytesIO(full_page_image(f)))
+        else:
+            title = f"Receiver {allowed_names[0].split()[1].replace('.jpg','').upper()}"
+            page = create_directional_page(template_img, job_name, title, f)
             merger.append(io.BytesIO(page))
 
     buf = io.BytesIO()
@@ -95,27 +106,21 @@ def generate_report(job_name, launcher_img, receiver_img, directional_imgs, temp
     merger.close()
     return buf
 
-st.set_page_config(page_title="Gibson/Oneok Report Generator", layout="centered")
-st.title("📄 Gibson/Oneok Report Generator")
+# Streamlit UI
+st.set_page_config(page_title="Strict 18-Page Report Generator", layout="centered")
+st.title("📄 Strict 18-Page Report Generator")
 
 job_name = st.text_input("Enter Job Name")
 template_pdf = st.file_uploader("Upload Template PDF", type=["pdf"])
-all_images = st.file_uploader("Upload 18 Images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+all_images = st.file_uploader("Upload All 18 Images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 if st.button("Generate Report"):
-    if not job_name or not template_pdf or not all_images or len(all_images) != 18:
-        st.error("Please upload the template PDF, exactly 18 images, and enter a job name.")
-    else:
-        launcher_img = next((f for f in all_images if f.name.lower().strip() == "launcher.jpg"), None)
-        receiver_img = next((f for f in all_images if f.name.lower().strip() == "receiver.jpg"), None)
-
-        if not launcher_img or not receiver_img:
-            st.error("Launcher.jpg and Receiver.jpg must be included.")
+    try:
+        if not job_name or not template_pdf or not all_images or len(all_images) != 18:
+            st.error("Please upload the template PDF, exactly 18 images, and enter a job name.")
         else:
-            directional_imgs = [f for f in all_images if f not in [launcher_img, receiver_img]]
-            try:
-                report = generate_report(job_name, launcher_img, receiver_img, directional_imgs, template_pdf)
-                st.success("✅ Report generated successfully!")
-                st.download_button("📥 Download Report", data=report, file_name="Final_Report.pdf", mime="application/pdf")
-            except Exception as e:
-                st.error(f"Error: {e}")
+            report = generate_report(job_name, all_images, template_pdf)
+            st.success("✅ Report generated successfully!")
+            st.download_button("📥 Download Report", data=report, file_name="Final_Report.pdf", mime="application/pdf")
+    except Exception as e:
+        st.error(f"Error: {e}")
