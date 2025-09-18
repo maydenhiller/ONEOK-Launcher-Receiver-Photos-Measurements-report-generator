@@ -3,7 +3,6 @@ from PIL import Image, ImageDraw, ImageFont
 from PyPDF2 import PdfMerger
 import fitz  # PyMuPDF
 import io
-from pathlib import Path
 
 # Directional aliases
 direction_aliases = {
@@ -45,19 +44,13 @@ def full_page_image(image_file):
     img.save(output, format="PDF")
     return output.getvalue()
 
-def load_font(size):
-    font_path = Path(__file__).parent / "fonts" / "LiberationSans-Regular.ttf"
-    if font_path.exists():
-        return ImageFont.truetype(str(font_path), size=size)
-    else:
-        raise FileNotFoundError(f"Font file not found at {font_path}. Please place LiberationSans-Regular.ttf in the fonts/ folder.")
-
-def create_directional_page(template_img, job_name, title, directional_img):
+def create_directional_page(template_img, job_name, title, directional_img, font_size):
     canvas = template_img.copy()
     W, H = canvas.size
     draw = ImageDraw.Draw(canvas)
 
-    font = load_font(size=800)
+    font_path = "fonts/LiberationSans-Regular.ttf"
+    font = ImageFont.truetype(font_path, size=font_size)
 
     draw.text((W // 2, int(H * 0.18)), job_name, font=font, anchor="mm", fill="black")
     draw.text((W // 2, int(H * 0.32)), title, font=font, anchor="mm", fill="black")
@@ -70,7 +63,7 @@ def create_directional_page(template_img, job_name, title, directional_img):
     canvas.save(output, format="PDF")
     return output.getvalue()
 
-def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf):
+def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf, font_size):
     template_img = extract_template_image(template_pdf)
     merger = PdfMerger()
 
@@ -80,7 +73,7 @@ def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiv
     for direction in direction_aliases:
         if direction in launcher_matched:
             title = f"Launcher {direction}"
-            page = create_directional_page(template_img, job_name, title, launcher_matched[direction])
+            page = create_directional_page(template_img, job_name, title, launcher_matched[direction], font_size)
             merger.append(io.BytesIO(page))
 
     merger.append(io.BytesIO(full_page_image(receiver_img)))
@@ -89,7 +82,7 @@ def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiv
     for direction in direction_aliases:
         if direction in receiver_matched:
             title = f"Receiver {direction}"
-            page = create_directional_page(template_img, job_name, title, receiver_matched[direction])
+            page = create_directional_page(template_img, job_name, title, receiver_matched[direction], font_size)
             merger.append(io.BytesIO(page))
 
     output = io.BytesIO()
@@ -103,6 +96,8 @@ st.title("📄 Gibson/Oneok Report Generator")
 job_name = st.text_input("Enter Job Name")
 template_pdf = st.file_uploader("Upload Template PDF (with branding)", type=["pdf"])
 all_images = st.file_uploader("Upload All 18 Images (Launcher.jpg, Receiver.jpg, and 16 directional views)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+
+font_size = st.sidebar.slider("Font Size", min_value=100, max_value=1000, value=800, step=50)
 
 if st.button("Generate Report"):
     if not job_name or not template_pdf or len(all_images) != 18:
@@ -118,8 +113,8 @@ if st.button("Generate Report"):
             try:
                 launcher_views = [f for f in directional_imgs if "launcher" in f.name.lower()]
                 receiver_views = [f for f in directional_imgs if "receiver" in f.name.lower()]
-                report = generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf)
+                report = generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf, font_size)
                 st.success("✅ Report generated successfully!")
                 st.download_button("📥 Download Report", data=report, file_name="Final_Report.pdf", mime="application/pdf")
-            except FileNotFoundError as e:
-                st.error(str(e))
+            except Exception as e:
+                st.error(f"Error: {e}")
