@@ -85,7 +85,9 @@ def generate_report(job_name, all_images, template_pdf):
         if idx == 1:
             merger.append(io.BytesIO(full_page_image(f)))
         else:
-            title = f"Launcher {allowed_names[0].split()[1].replace('.jpg','').upper()}"
+            # Capitalize only the first letter of the direction
+            direction = allowed_names[0].split()[1].replace('.jpg', '').capitalize()
+            title = f"Launcher {direction}"
             page = create_directional_page(template_img, job_name, title, f)
             merger.append(io.BytesIO(page))
 
@@ -97,7 +99,9 @@ def generate_report(job_name, all_images, template_pdf):
         if idx == 10:
             merger.append(io.BytesIO(full_page_image(f)))
         else:
-            title = f"Receiver {allowed_names[0].split()[1].replace('.jpg','').upper()}"
+            # Capitalize only the first letter of the direction
+            direction = allowed_names[0].split()[1].replace('.jpg', '').capitalize()
+            title = f"Receiver {direction}"
             page = create_directional_page(template_img, job_name, title, f)
             merger.append(io.BytesIO(page))
 
