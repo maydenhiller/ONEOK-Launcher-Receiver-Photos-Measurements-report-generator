@@ -113,8 +113,11 @@ def generate_report(job_name, all_images):
     return buf
 
 # Streamlit UI
-st.set_page_config(page_title="Strict 18-Page Report Generator", layout="centered")
-st.title("📄 Strict 18-Page Report Generator")
+st.set_page_config(
+    page_title="Launcher-Receiver Photos & Measurements Generator",
+    layout="centered"
+)
+st.title("📄 Launcher-Receiver Photos & Measurements Generator")
 
 job_name = st.text_input("Enter Job Name")
 all_images = st.file_uploader("Upload All 18 Images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
