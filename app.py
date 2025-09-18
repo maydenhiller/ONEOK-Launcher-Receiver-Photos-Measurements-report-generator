@@ -3,6 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 from PyPDF2 import PdfMerger
 import fitz  # PyMuPDF
 import io
+import os
 
 # Directional aliases
 direction_aliases = {
@@ -44,20 +45,23 @@ def full_page_image(image_file):
     img.save(output, format="PDF")
     return output.getvalue()
 
+def load_font(size):
+    font_path = os.path.join("fonts", "LiberationSans-Regular.ttf")
+    if os.path.exists(font_path):
+        return ImageFont.truetype(font_path, size=size)
+    else:
+        raise FileNotFoundError("Font file not found. Please place LiberationSans-Regular.ttf in the fonts/ folder.")
+
 def create_directional_page(template_img, job_name, title, directional_img):
     canvas = template_img.copy()
     W, H = canvas.size
     draw = ImageDraw.Draw(canvas)
 
-    # Load real font
-    font_path = "fonts/LiberationSans-Regular.ttf"
-    font = ImageFont.truetype(font_path, size=800)
+    font = load_font(size=800)
 
-    # Draw text lower on the page
     draw.text((W // 2, int(H * 0.18)), job_name, font=font, anchor="mm", fill="black")
     draw.text((W // 2, int(H * 0.32)), title, font=font, anchor="mm", fill="black")
 
-    # Fixed image size
     directional = Image.open(directional_img).convert("RGB")
     directional = directional.resize((1600, 1200))
     canvas.paste(directional, (int((W - 1600) / 2), int(H * 0.45)))
@@ -111,8 +115,11 @@ if st.button("Generate Report"):
         if not launcher_img or not receiver_img or len(directional_imgs) != 16:
             st.error("Make sure Launcher.jpg and Receiver.jpg are included, plus 16 directional images.")
         else:
-            launcher_views = [f for f in directional_imgs if "launcher" in f.name.lower()]
-            receiver_views = [f for f in directional_imgs if "receiver" in f.name.lower()]
-            report = generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf)
-            st.success("✅ Report generated successfully!")
-            st.download_button("📥 Download Report", data=report, file_name="Final_Report.pdf", mime="application/pdf")
+            try:
+                launcher_views = [f for f in directional_imgs if "launcher" in f.name.lower()]
+                receiver_views = [f for f in directional_imgs if "receiver" in f.name.lower()]
+                report = generate_report(job_name, launcher_img, receiver_img, launcher_views, receiver_views, template_pdf)
+                st.success("✅ Report generated successfully!")
+                st.download_button("📥 Download Report", data=report, file_name="Final_Report.pdf", mime="application/pdf")
+            except FileNotFoundError as e:
+                st.error(str(e))
