@@ -3,6 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 from PyPDF2 import PdfMerger
 import fitz  # PyMuPDF
 import io
+import os
 
 # Directional aliases
 direction_aliases = {
@@ -31,7 +32,9 @@ def match_directional_images(files, prefix):
     return matched
 
 def extract_template_image(pdf_file):
-    doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+    # Note: pdf_file is a Streamlit UploadedFile; read() consumes it
+    data = pdf_file.read()
+    doc = fitz.open(stream=data, filetype="pdf")
     page_index = 1 if doc.page_count > 1 else 0
     page = doc.load_page(page_index)
     pix = page.get_pixmap(dpi=200)
@@ -44,20 +47,40 @@ def full_page_image(image_file):
     img.save(output, format="PDF")
     return output.getvalue()
 
+def load_font_or_fail(size: int) -> ImageFont.FreeTypeFont:
+    # Try fonts/ first, then repo root
+    candidates = [
+        "fonts/LiberationSans-Regular.ttf",
+        "LiberationSans-Regular.ttf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size=size)
+            except OSError:
+                # Found the file but can't open (likely corrupted)
+                raise OSError(f"Font file found but could not be opened: {path}. Re-upload a valid .ttf.")
+    raise FileNotFoundError(
+        "LiberationSans-Regular.ttf not found. Place it in either fonts/ or the repo root. "
+        "Paths checked: fonts/LiberationSans-Regular.ttf, ./LiberationSans-Regular.ttf"
+    )
+
 def create_directional_page(template_img, job_name, title, directional_img, font_size):
     canvas = template_img.copy()
     W, H = canvas.size
     draw = ImageDraw.Draw(canvas)
 
-    font_path = "fonts/LiberationSans-Regular.ttf"
-    font = ImageFont.truetype(font_path, size=font_size)
+    font = load_font_or_fail(size=font_size)
 
+    # Text positions are ratio-based and independent of image scaling
     draw.text((W // 2, int(H * 0.18)), job_name, font=font, anchor="mm", fill="black")
     draw.text((W // 2, int(H * 0.32)), title, font=font, anchor="mm", fill="black")
 
+    # Fixed directional image size independent of font size
     directional = Image.open(directional_img).convert("RGB")
-    directional = directional.resize((1600, 1200))
-    canvas.paste(directional, (int((W - 1600) / 2), int(H * 0.45)))
+    target_w, target_h = 1600, 1200
+    directional = directional.resize((target_w, target_h))
+    canvas.paste(directional, (int((W - target_w) / 2), int(H * 0.45)))
 
     output = io.BytesIO()
     canvas.save(output, format="PDF")
@@ -67,8 +90,10 @@ def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiv
     template_img = extract_template_image(template_pdf)
     merger = PdfMerger()
 
+    # Full-page launcher image
     merger.append(io.BytesIO(full_page_image(launcher_img)))
 
+    # Launcher directional pages
     launcher_matched = match_directional_images(launcher_views, "launcher")
     for direction in direction_aliases:
         if direction in launcher_matched:
@@ -76,8 +101,10 @@ def generate_report(job_name, launcher_img, receiver_img, launcher_views, receiv
             page = create_directional_page(template_img, job_name, title, launcher_matched[direction], font_size)
             merger.append(io.BytesIO(page))
 
+    # Full-page receiver image
     merger.append(io.BytesIO(full_page_image(receiver_img)))
 
+    # Receiver directional pages
     receiver_matched = match_directional_images(receiver_views, "receiver")
     for direction in direction_aliases:
         if direction in receiver_matched:
@@ -97,10 +124,11 @@ job_name = st.text_input("Enter Job Name")
 template_pdf = st.file_uploader("Upload Template PDF (with branding)", type=["pdf"])
 all_images = st.file_uploader("Upload All 18 Images (Launcher.jpg, Receiver.jpg, and 16 directional views)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
-font_size = st.sidebar.slider("Font Size", min_value=100, max_value=1000, value=800, step=50)
+# Font size slider
+font_size = st.sidebar.slider("Font size (points)", min_value=100, max_value=1000, value=800, step=25)
 
 if st.button("Generate Report"):
-    if not job_name or not template_pdf or len(all_images) != 18:
+    if not job_name or not template_pdf or not all_images or len(all_images) != 18:
         st.error("Please upload the template PDF, exactly 18 images, and enter a job name.")
     else:
         launcher_img = next((f for f in all_images if f.name.lower() == "launcher.jpg"), None)
